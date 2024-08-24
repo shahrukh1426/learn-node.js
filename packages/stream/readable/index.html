@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Chunk Loading Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #pdfViewer {
+        width: 100%;
+        height: 80vh;
+        border: 1px solid #ddd;
+        margin-top: 20px;
+        overflow: auto;
+      }
+      canvas {
+        border: 1px solid #ddd;
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PDF Chunk Loading Demo</h1>
+    <button id="prevPageButton">Previous Page</button>
+    <button id="nextPageButton">Next Page</button>
+    <div id="pdfViewer"></div>
+
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.15.349/pdf.min.js"></script>
+
+    <script>
+      const url = "http://localhost:3000/pdf"; // URL to your Node.js server
+      const pdfViewer = document.getElementById("pdfViewer");
+      const prevPageButton = document.getElementById("prevPageButton");
+      const nextPageButton = document.getElementById("nextPageButton");
+
+      let pdfDoc = null;
+      let pageNum = 1;
+      let pageRendering = false;
+      let pageNumPending = null;
+
+      // Load PDF Document
+      pdfjsLib
+        .getDocument({
+          url: url,
+          range: { start: 0, end: 1024 * 1024 }, // Initial range
+        })
+        .promise.then((pdf) => {
+          pdfDoc = pdf;
+          renderPage(pageNum);
+        });
+
+      // Render a page
+      function renderPage(num) {
+        pageRendering = true;
+
+        // Fetch the page
+        pdfDoc
+          .getPage(num)
+          .then((page) => {
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            pdfViewer.innerHTML = ""; // Clear previous content
+            pdfViewer.appendChild(canvas);
+
+            // Render the page into the canvas context
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport,
+            };
+            const renderTask = page.render(renderContext);
+
+            renderTask.promise.then(() => {
+              pageRendering = false;
+              if (pageNumPending !== null) {
+                renderPage(pageNumPending);
+                pageNumPending = null;
+              }
+            });
+          })
+          .catch((error) => {
+            console.error("Error rendering page:", error);
+            pageRendering = false;
+          });
+
+        // Update page numbers
+        document.title = `Page ${num} of ${pdfDoc.numPages}`;
+      }
+
+      // Show next page
+      nextPageButton.addEventListener("click", () => {
+        if (pageNum >= pdfDoc.numPages) return;
+        pageNum++;
+        renderPage(pageNum);
+      });
+
+      // Show previous page
+      prevPageButton.addEventListener("click", () => {
+        if (pageNum <= 1) return;
+        pageNum--;
+        renderPage(pageNum);
+      });
+    </script>
+  </body>
+</html>
